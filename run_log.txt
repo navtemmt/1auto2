@@ -1,0 +1,3 @@
+[2025-08-16 05:50:52 UTC] ✅ Updated data/nq_1m/2025-08.csv (rows: 500)
+[2025-08-16 05:50:53 UTC] ✅ Updated data/nq_5m/2025-08.csv (rows: 500)
+[2025-08-16 05:50:53 UTC] ✅ Data fetch successful

@@ -18,7 +18,7 @@ def log_run(message):
 
 def fetch_and_update(symbol="NQ1!", exchange="CME_MINI", 
                      interval=Interval.in_1_minute, 
-                     n_bars=500,
+                     n_bars=4500,
                      folder="data/nq_1m",
                      username=None, password=None):
     """

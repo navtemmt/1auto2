@@ -1,47 +1,51 @@
 import os
 import pandas as pd
+from datetime import datetime
 
-def check_file(filename, freq="1min", price_range=(1000, 30000)):
-    """
-    Check data quality for OHLC file.
-    """
-    if not os.path.exists(filename):
-        return f"❌ {filename} not found.\n"
+def check_file(path):
+    if not os.path.exists(path):
+        return f"{path} not found.\n"
 
-    df = pd.read_csv(filename, parse_dates=["datetime"])
+    df = pd.read_csv(path, parse_dates=["datetime"])
+
+    report = [f"=== Checking {path} ==="]
+
+    # Check for missing timestamps (only if datetime sorted)
     df = df.sort_values("datetime")
+    if len(df) > 1:
+        diffs = df["datetime"].diff().dropna().value_counts()
+        if not diffs.empty:
+            most_common = diffs.idxmax()
+            missing = (df["datetime"].diff() > most_common).sum()
+            report.append(f"Missing bars: {missing}")
+        else:
+            report.append("Missing bars: 0")
+    else:
+        report.append("Missing bars: (not enough data)")
 
-    report = []
-    report.append(f"=== Checking {filename} ===")
+    # Duplicates
+    dup = df.duplicated(subset=["datetime"]).sum()
+    report.append(f"Duplicate rows: {dup}")
 
-    # 1. Missing bars
-    expected = pd.date_range(df["datetime"].min(), df["datetime"].max(), freq=freq)
-    missing = expected.difference(df["datetime"])
-    report.append(f"Missing bars: {len(missing)}")
+    # Out-of-range checks
+    if "high" in df and "low" in df and "close" in df:
+        outliers = df[(df["high"] < df["low"]) | (df["close"] > df["high"]) | (df["close"] < df["low"])]
+        report.append(f"Out-of-range prices: {len(outliers)}")
 
-    # 2. Duplicates
-    dupes = df[df.duplicated("datetime")]
-    report.append(f"Duplicate rows: {len(dupes)}")
-
-    # 3. Outliers
-    min_price, max_price = df[["open","high","low","close"]].min().min(), df[["open","high","low","close"]].max().max()
-    outliers = df[(df["close"] < price_range[0]) | (df["close"] > price_range[1])]
-    report.append(f"Out-of-range prices: {len(outliers)} "
-                  f"(min={min_price}, max={max_price})")
-
-    # 4. Sample preview
-    report.append(f"First row: {df.head(1).to_dict('records')[0]}")
-    report.append(f"Last row: {df.tail(1).to_dict('records')[0]}")
+    # Sample rows
+    if not df.empty:
+        report.append(f"First row: {df.iloc[0].to_dict()}")
+        report.append(f"Last row: {df.iloc[-1].to_dict()}")
 
     return "\n".join(report) + "\n\n"
 
 
 if __name__ == "__main__":
-    report = ""
-    report += check_file("data/nq_1m/2025-08.csv", freq="1min")
-    report += check_file("data/nq_5m/2025-08.csv", freq="5min")
+    report_path = "quality_report.txt"
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    with open("quality_report.txt", "a") as f:
-        f.write(report)
-
-    print("✅ Quality check done. Results saved to quality_report.txt")
+    with open(report_path, "a") as f:   # <-- append mode
+        f.write(f"=== Run at {timestamp} ===\n")
+        f.write(check_file("data/nq_1m/2025-08.csv"))
+        f.write(check_file("data/nq_5m/2025-08.csv"))
+        f.write("\n")

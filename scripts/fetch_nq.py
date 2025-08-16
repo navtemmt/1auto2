@@ -1,4 +1,4 @@
-import os 
+import os
 import pandas as pd
 from datetime import datetime
 
@@ -8,6 +8,12 @@ try:
 except ModuleNotFoundError:
     os.system("pip install tradingview-datafeed")
     from tvDatafeed import TvDatafeed, Interval
+
+
+def log_run(message):
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    with open("run_log.txt", "a") as f:   # append mode
+        f.write(f"[{ts}] {message}\n")
 
 
 def fetch_and_update(symbol="NQ1!", exchange="CME_MINI", 
@@ -26,18 +32,19 @@ def fetch_and_update(symbol="NQ1!", exchange="CME_MINI",
     df_new = tv.get_hist(symbol=symbol, exchange=exchange, interval=interval, n_bars=n_bars)
 
     if df_new is None or df_new.empty:
-        print(f"⚠️ No new data fetched for {folder}.")
-        return 0
+        log_run(f"⚠️ No new data fetched for {folder}")
+        return
 
     df_new.reset_index(inplace=True)  # move datetime to column
-    df_new["month"] = df_new["datetime"].dt.strftime("%Y-%m")
+    df_new["month"] = df_new["datetime"].dt.to_period("M")
 
+    # Ensure folder exists
     os.makedirs(folder, exist_ok=True)
 
-    total_rows = 0
-
+    # Split by month and save
     for month, df_month in df_new.groupby("month"):
-        filename = os.path.join(folder, f"{month}.csv")
+        month_str = str(month)  # e.g., "2025-08"
+        filename = os.path.join(folder, f"{month_str}.csv")
 
         if os.path.exists(filename):
             df_old = pd.read_csv(filename, parse_dates=["datetime"])
@@ -48,25 +55,21 @@ def fetch_and_update(symbol="NQ1!", exchange="CME_MINI",
             df_combined = df_month
 
         df_combined.to_csv(filename, index=False)
-        total_rows += len(df_combined)
-
-        print(f"✅ Updated {filename} (rows: {len(df_combined)})")
-
-    return total_rows
+        log_run(f"✅ Updated {filename} (rows: {len(df_combined)})")
 
 
 if __name__ == "__main__":
-    # 🔹 Fetch NQ 1-minute
-    rows_1m = fetch_and_update(symbol="NQ1!", exchange="CME_MINI",
-                               interval=Interval.in_1_minute,
-                               folder="data/nq_1m")
+    try:
+        # 🔹 NQ 1-minute
+        fetch_and_update(symbol="NQ1!", exchange="CME_MINI", 
+                         interval=Interval.in_1_minute, 
+                         folder="data/nq_1m")
 
-    # 🔹 Fetch NQ 5-minute
-    rows_5m = fetch_and_update(symbol="NQ1!", exchange="CME_MINI",
-                               interval=Interval.in_5_minute,
-                               folder="data/nq_5m")
+        # 🔹 NQ 5-minute
+        fetch_and_update(symbol="NQ1!", exchange="CME_MINI", 
+                         interval=Interval.in_5_minute, 
+                         folder="data/nq_5m")
 
-    # 🔹 Write run log
-    os.makedirs("data", exist_ok=True)
-    with open("data/run_log.txt", "a") as f:
-        f.write(f"{datetime.utcnow().isoformat()} UTC | NQ 1m rows: {rows_1m}, NQ 5m rows: {rows_5m}\n")
+        log_run("✅ Data fetch successful")
+    except Exception as e:
+        log_run(f"❌ Error: {e}")

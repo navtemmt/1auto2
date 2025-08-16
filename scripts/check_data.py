@@ -10,8 +10,10 @@ def check_file(path):
 
     report = [f"=== Checking {path} ==="]
 
-    # Check for missing timestamps (only if datetime sorted)
+    # Ensure sorted by datetime
     df = df.sort_values("datetime")
+
+    # Check for missing bars
     if len(df) > 1:
         diffs = df["datetime"].diff().dropna().value_counts()
         if not diffs.empty:
@@ -28,8 +30,12 @@ def check_file(path):
     report.append(f"Duplicate rows: {dup}")
 
     # Out-of-range checks
-    if "high" in df and "low" in df and "close" in df:
-        outliers = df[(df["high"] < df["low"]) | (df["close"] > df["high"]) | (df["close"] < df["low"])]
+    if {"high", "low", "close"}.issubset(df.columns):
+        outliers = df[
+            (df["high"] < df["low"]) | 
+            (df["close"] > df["high"]) | 
+            (df["close"] < df["low"])
+        ]
         report.append(f"Out-of-range prices: {len(outliers)}")
 
     # Sample rows
@@ -44,8 +50,15 @@ if __name__ == "__main__":
     report_path = "quality_report.txt"
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    with open(report_path, "a") as f:   # <-- append mode
+    # 🔹 Auto-detect current month file name
+    current_month = datetime.utcnow().strftime("%Y-%m")
+    files_to_check = [
+        f"data/nq_1m/{current_month}.csv",
+        f"data/nq_5m/{current_month}.csv"
+    ]
+
+    with open(report_path, "a") as f:   # append mode
         f.write(f"=== Run at {timestamp} ===\n")
-        f.write(check_file("data/nq_1m/2025-08.csv"))
-        f.write(check_file("data/nq_5m/2025-08.csv"))
+        for file in files_to_check:
+            f.write(check_file(file))
         f.write("\n")

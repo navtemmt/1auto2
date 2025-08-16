@@ -5,9 +5,6 @@ on:
     - cron: "0 0 * * *"   # every day at 00:00 UTC
   workflow_dispatch:
 
-permissions:
-  contents: write   # ✅ allow pushing to repo
-
 jobs:
   fetch-data:
     runs-on: ubuntu-latest
@@ -36,4 +33,3 @@ jobs:
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

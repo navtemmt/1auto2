@@ -1,75 +1,51 @@
-import os
-import pandas as pd
-from datetime import datetime
+def check_data_quality(filename, interval="1min", log_file="run_log.txt"):
+    import pandas as pd
+    from pandas.tseries.frequencies import to_offset
+    from datetime import datetime
 
-# Ensure tradingview-datafeed is installed
-try:
-    from tvDatafeed import TvDatafeed, Interval
-except ModuleNotFoundError:
-    os.system("pip install tradingview-datafeed")
-    from tvDatafeed import TvDatafeed, Interval
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    with open(log_file, "a") as f:
+        f.write(f"\n=== Run at {now} ===\n")
+        f.write(f"=== Checking {filename} ===\n")
 
-
-def log_run(message):
-    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-    with open("run_log.txt", "a") as f:   # append mode
-        f.write(f"[{ts}] {message}\n")
-
-
-def fetch_and_update(symbol="NQ1!", exchange="CME_MINI", 
-                     interval=Interval.in_1_minute, 
-                     n_bars=4500,
-                     folder="data/nq_1m",
-                     username=None, password=None):
-    """
-    Fetches OHLC data from TradingView and stores it in monthly CSV files.
-    """
-
-    # Connect to TradingView
-    tv = TvDatafeed(username=username, password=password)
-
-    # Fetch latest bars
-    df_new = tv.get_hist(symbol=symbol, exchange=exchange, interval=interval, n_bars=n_bars)
-
-    if df_new is None or df_new.empty:
-        log_run(f"⚠️ No new data fetched for {folder}")
+    if not os.path.exists(filename):
+        with open(log_file, "a") as f:
+            f.write("No data file found.\n")
         return
 
-    df_new.reset_index(inplace=True)  # move datetime to column
-    df_new["month"] = df_new["datetime"].dt.to_period("M")
+    df = pd.read_csv(filename, parse_dates=["datetime"])
+    if df.empty:
+        with open(log_file, "a") as f:
+            f.write("File is empty.\n")
+        return
 
-    # Ensure folder exists
-    os.makedirs(folder, exist_ok=True)
+    # Sort by datetime
+    df.sort_values("datetime", inplace=True)
 
-    # Split by month and save
-    for month, df_month in df_new.groupby("month"):
-        month_str = str(month)  # e.g., "2025-08"
-        filename = os.path.join(folder, f"{month_str}.csv")
+    # Build expected range of timestamps
+    freq = "1min" if interval == "1min" else "5min"
+    expected_range = pd.date_range(df["datetime"].min(), df["datetime"].max(), freq=to_offset(freq))
+    actual_range = pd.to_datetime(df["datetime"])
 
-        if os.path.exists(filename):
-            df_old = pd.read_csv(filename, parse_dates=["datetime"])
-            df_combined = pd.concat([df_old, df_month], ignore_index=True)
-            df_combined.drop_duplicates(subset=["datetime"], inplace=True)
-            df_combined.sort_values("datetime", inplace=True)
-        else:
-            df_combined = df_month
+    # Find missing
+    missing = expected_range.difference(actual_range)
 
-        df_combined.to_csv(filename, index=False)
-        log_run(f"✅ Updated {filename} (rows: {len(df_combined)})")
+    # Duplicates
+    duplicates = df.duplicated(subset=["datetime"]).sum()
 
+    # Out-of-range (example: negative prices)
+    out_of_range = ((df["open"] <= 0) | (df["high"] <= 0) | (df["low"] <= 0) | (df["close"] <= 0)).sum()
 
-if __name__ == "__main__":
-    try:
-        # 🔹 NQ 1-minute
-        fetch_and_update(symbol="NQ1!", exchange="CME_MINI", 
-                         interval=Interval.in_1_minute, 
-                         folder="data/nq_1m")
-
-        # 🔹 NQ 5-minute
-        fetch_and_update(symbol="NQ1!", exchange="CME_MINI", 
-                         interval=Interval.in_5_minute, 
-                         folder="data/nq_5m")
-
-        log_run("✅ Data fetch successful")
-    except Exception as e:
-        log_run(f"❌ Error: {e}")
+    # Log results
+    with open(log_file, "a") as f:
+        f.write(f"Missing bars: {len(missing)}\n")
+        if len(missing) > 0:
+            f.write(f"Missing timestamps:\n")
+            for ts in missing[:20]:  # limit to first 20 so log doesn’t explode
+                f.write(f"  {ts}\n")
+            if len(missing) > 20:
+                f.write(f"  ... ({len(missing)-20} more)\n")
+        f.write(f"Duplicate rows: {duplicates}\n")
+        f.write(f"Out-of-range prices: {out_of_range}\n")
+        f.write(f"First row: {df.iloc[0].to_dict()}\n")
+        f.write(f"Last row: {df.iloc[-1].to_dict()}\n")

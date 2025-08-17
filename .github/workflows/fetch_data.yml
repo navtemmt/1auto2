@@ -1,12 +1,12 @@
-name: Fetch NQ Data
+name: Fetch Futures Data
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # every day at 00:00 UTC
+    - cron: "*/5 * * * *"   # run daily at midnight UTC
   workflow_dispatch:
 
 permissions:
-  contents: write   # ✅ correct placement
+  contents: write   # ✅ allow push from actions
 
 jobs:
   fetch-data:
@@ -25,12 +25,12 @@ jobs:
         run: pip install pandas tradingview-datafeed
 
       - name: Run fetcher
-        run: python scripts/fetch_nq.py
+        run: python scripts/fetch_data.py
 
       - name: Commit & Push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/nq_1m/ data/nq_5m/ run_log.txt
-          git commit -m "Update NQ data + log [skip ci]" || echo "No changes to commit"
+          git add data/NQ1!_* data/ES1!_* run_log.txt
+          git commit -m "Update NQ1! & ES1! data [skip ci]" || echo "No changes to commit"
           git push

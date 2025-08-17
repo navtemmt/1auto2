@@ -2,7 +2,7 @@ name: Fetch NQ Data
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # every day at 00:00 UTC
+    - cron: "*/5 * * * *"   # every day at 00:00 UTC
   workflow_dispatch:
 
 permissions:

@@ -1,51 +1,57 @@
-def check_data_quality(filename, interval="1min", log_file="run_log.txt"):
+import os
+import pandas as pd
+
+# Ensure pandas is installed
+try:
     import pandas as pd
-    from pandas.tseries.frequencies import to_offset
-    from datetime import datetime
+except ModuleNotFoundError:
+    os.system("pip install pandas")
+    import pandas as pd
 
-    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-    with open(log_file, "a") as f:
-        f.write(f"\n=== Run at {now} ===\n")
-        f.write(f"=== Checking {filename} ===\n")
+# Ensure tradingview-datafeed is installed
+try:
+    from tvDatafeed import TvDatafeed, Interval
+except ModuleNotFoundError:
+    os.system("pip install tradingview-datafeed")
+    from tvDatafeed import TvDatafeed, Interval
 
-    if not os.path.exists(filename):
-        with open(log_file, "a") as f:
-            f.write("No data file found.\n")
+
+def fetch_and_update(symbol, exchange, interval, filename, username=None, password=None):
+    """
+    Fetches OHLC data from TradingView and appends it to a CSV file.
+    """
+    tv = TvDatafeed(username=username, password=password)
+    df_new = tv.get_hist(symbol=symbol, exchange=exchange, interval=interval, n_bars=500)
+
+    if df_new is None or df_new.empty:
+        print(f"⚠️ No new data fetched for {symbol} -> {filename}.")
         return
 
-    df = pd.read_csv(filename, parse_dates=["datetime"])
-    if df.empty:
-        with open(log_file, "a") as f:
-            f.write("File is empty.\n")
-        return
+    df_new.reset_index(inplace=True)  # move datetime to column
 
-    # Sort by datetime
-    df.sort_values("datetime", inplace=True)
+    if os.path.exists(filename):
+        df_old = pd.read_csv(filename, parse_dates=["datetime"])
+        df_combined = pd.concat([df_old, df_new], ignore_index=True)
+        df_combined.drop_duplicates(subset=["datetime"], inplace=True)
+        df_combined.sort_values("datetime", inplace=True)
+    else:
+        df_combined = df_new
 
-    # Build expected range of timestamps
-    freq = "1min" if interval == "1min" else "5min"
-    expected_range = pd.date_range(df["datetime"].min(), df["datetime"].max(), freq=to_offset(freq))
-    actual_range = pd.to_datetime(df["datetime"])
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    df_combined.to_csv(filename, index=False)
 
-    # Find missing
-    missing = expected_range.difference(actual_range)
+    print(f"✅ Updated {symbol} {interval} -> {filename} (rows: {len(df_combined)})")
 
-    # Duplicates
-    duplicates = df.duplicated(subset=["datetime"]).sum()
 
-    # Out-of-range (example: negative prices)
-    out_of_range = ((df["open"] <= 0) | (df["high"] <= 0) | (df["low"] <= 0) | (df["close"] <= 0)).sum()
+if __name__ == "__main__":
+    tasks = [
+        # NQ1!
+        ("NQ1!", "CME_MINI", Interval.in_1_minute, "data/nq_1m.csv"),
+        ("NQ1!", "CME_MINI", Interval.in_5_minute, "data/nq_5m.csv"),
 
-    # Log results
-    with open(log_file, "a") as f:
-        f.write(f"Missing bars: {len(missing)}\n")
-        if len(missing) > 0:
-            f.write(f"Missing timestamps:\n")
-            for ts in missing[:20]:  # limit to first 20 so log doesn’t explode
-                f.write(f"  {ts}\n")
-            if len(missing) > 20:
-                f.write(f"  ... ({len(missing)-20} more)\n")
-        f.write(f"Duplicate rows: {duplicates}\n")
-        f.write(f"Out-of-range prices: {out_of_range}\n")
-        f.write(f"First row: {df.iloc[0].to_dict()}\n")
-        f.write(f"Last row: {df.iloc[-1].to_dict()}\n")
+        # ES1! (only 1m)
+        ("ES1!", "CME_MINI", Interval.in_1_minute, "data/es_1m.csv"),
+    ]
+
+    for symbol, exchange, interval, filename in tasks:
+        fetch_and_update(symbol, exchange, interval, filename)

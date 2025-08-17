@@ -1,57 +1,55 @@
 import os
 import pandas as pd
+from datetime import datetime
+from tvDatafeed import TvDatafeed, Interval
 
-# Ensure pandas is installed
-try:
-    import pandas as pd
-except ModuleNotFoundError:
-    os.system("pip install pandas")
-    import pandas as pd
+# Init TradingView datafeed
+tv = TvDatafeed()
 
-# Ensure tradingview-datafeed is installed
-try:
-    from tvDatafeed import TvDatafeed, Interval
-except ModuleNotFoundError:
-    os.system("pip install tradingview-datafeed")
-    from tvDatafeed import TvDatafeed, Interval
+# Folder structure
+DATA_DIR = "data"
+os.makedirs(DATA_DIR, exist_ok=True)
 
+SYMBOLS = {
+    "NQ1!": {"exchange": "CME_MINI", "intervals": [Interval.in_1_minute, Interval.in_5_minute]},
+    "ES1!": {"exchange": "CME_MINI", "intervals": [Interval.in_1_minute]},
+}
 
-def fetch_and_update(symbol, exchange, interval, filename, username=None, password=None):
-    """
-    Fetches OHLC data from TradingView and appends it to a CSV file.
-    """
-    tv = TvDatafeed(username=username, password=password)
-    df_new = tv.get_hist(symbol=symbol, exchange=exchange, interval=interval, n_bars=500)
-
-    if df_new is None or df_new.empty:
-        print(f"⚠️ No new data fetched for {symbol} -> {filename}.")
+def fetch_and_update(symbol, exchange, interval):
+    """Fetch new bars and append them into monthly CSV files."""
+    print(f"=== Fetching {symbol} {interval} ===")
+    df = tv.get_hist(symbol=symbol, exchange=exchange, interval=interval, n_bars=500)
+    if df is None or df.empty:
+        print(f"⚠️ No data for {symbol} {interval}")
         return
 
-    df_new.reset_index(inplace=True)  # move datetime to column
+    df.reset_index(inplace=True)
+    df["year_month"] = df["datetime"].dt.strftime("%Y-%m")
 
-    if os.path.exists(filename):
-        df_old = pd.read_csv(filename, parse_dates=["datetime"])
-        df_combined = pd.concat([df_old, df_new], ignore_index=True)
-        df_combined.drop_duplicates(subset=["datetime"], inplace=True)
-        df_combined.sort_values("datetime", inplace=True)
-    else:
-        df_combined = df_new
+    # Save by month
+    base_dir = os.path.join(DATA_DIR, f"{symbol}_{interval.name}")
+    os.makedirs(base_dir, exist_ok=True)
 
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    df_combined.to_csv(filename, index=False)
+    for month, chunk in df.groupby("year_month"):
+        file_path = os.path.join(base_dir, f"{month}.csv")
 
-    print(f"✅ Updated {symbol} {interval} -> {filename} (rows: {len(df_combined)})")
+        if os.path.exists(file_path):
+            old = pd.read_csv(file_path, parse_dates=["datetime"])
+            combined = pd.concat([old, chunk]).drop_duplicates(subset="datetime").sort_values("datetime")
+        else:
+            combined = chunk
 
+        combined.to_csv(file_path, index=False)
+        print(f"✅ Updated {file_path} ({len(chunk)} new rows)")
+
+def main():
+    for symbol, cfg in SYMBOLS.items():
+        for interval in cfg["intervals"]:
+            fetch_and_update(symbol, cfg["exchange"], interval)
+
+    # Log run
+    with open("run_log.txt", "a") as f:
+        f.write(f"=== Run at {datetime.utcnow()} UTC ===\n")
 
 if __name__ == "__main__":
-    tasks = [
-        # NQ1!
-        ("NQ1!", "CME_MINI", Interval.in_1_minute, "data/nq_1m.csv"),
-        ("NQ1!", "CME_MINI", Interval.in_5_minute, "data/nq_5m.csv"),
-
-        # ES1! (only 1m)
-        ("ES1!", "CME_MINI", Interval.in_1_minute, "data/es_1m.csv"),
-    ]
-
-    for symbol, exchange, interval, filename in tasks:
-        fetch_and_update(symbol, exchange, interval, filename)
+    main()

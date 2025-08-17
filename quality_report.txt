@@ -30,3 +30,19 @@ First row: {'datetime': Timestamp('2025-08-01 00:00:00'), 'symbol': 'CME_MINI:NQ
 Last row: {'datetime': Timestamp('2025-08-15 20:55:00'), 'symbol': 'CME_MINI:NQ1!', 'open': 23795.25, 'high': 23798.0, 'low': 23791.75, 'close': 23796.75, 'volume': 639.0, 'year_month': '2025-08', 'month': nan}
 
 
+=== Run at 2025-08-17 02:35:27 UTC ===
+=== Checking data/nq_1m/2025-08.csv ===
+Missing bars: 4
+Duplicate rows: 0
+Out-of-range prices: 0
+First row: {'datetime': Timestamp('2025-08-12 14:59:00'), 'symbol': 'CME_MINI:NQ1!', 'open': 23774.5, 'high': 23777.25, 'low': 23772.25, 'close': 23776.75, 'volume': 587.0, 'year_month': nan, 'month': '2025-08'}
+Last row: {'datetime': Timestamp('2025-08-15 20:59:00'), 'symbol': 'CME_MINI:NQ1!', 'open': 23796.75, 'high': 23798.0, 'low': 23795.5, 'close': 23796.75, 'volume': 144.0, 'year_month': '2025-08', 'month': nan}
+
+=== Checking data/nq_5m/2025-08.csv ===
+Missing bars: 10
+Duplicate rows: 0
+Out-of-range prices: 0
+First row: {'datetime': Timestamp('2025-08-01 00:00:00'), 'symbol': 'CME_MINI:NQ1!', 'open': 23297.5, 'high': 23303.5, 'low': 23283.0, 'close': 23287.75, 'volume': 704.0, 'year_month': nan, 'month': '2025-08'}
+Last row: {'datetime': Timestamp('2025-08-15 20:55:00'), 'symbol': 'CME_MINI:NQ1!', 'open': 23795.25, 'high': 23798.0, 'low': 23791.75, 'close': 23796.75, 'volume': 639.0, 'year_month': '2025-08', 'month': nan}
+
+
